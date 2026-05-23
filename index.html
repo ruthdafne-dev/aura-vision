@@ -170,14 +170,7 @@ function renderAuraFromMask(image){
   blurCtx.clearRect(0,0,W,H);
   auraCtx.clearRect(0,0,W,H);
 
-  // 1. Dibujar el video de fondo espejado (la cámara real del usuario)
-  blurCtx.save();
-  blurCtx.translate(W,0);
-  blurCtx.scale(-1,1);
-  blurCtx.drawImage(image,0,0,W,H);
-  blurCtx.restore();
-
-  // 2. Crear silueta de color basada en la máscara de MediaPipe
+  // 1. Crear silueta de color basada en la máscara de MediaPipe
   const maskTmp = document.createElement('canvas');
   maskTmp.width = W; maskTmp.height = H;
   const mCtx = maskTmp.getContext('2d');
@@ -194,7 +187,7 @@ function renderAuraFromMask(image){
   mCtx.globalAlpha = mix;
   mCtx.fillRect(0,0,W,H);
 
-  // 3. Dibujar el resplandor difuminado (Glow) ALREDEDOR del cuerpo
+  // 2. Dibujar el resplandor difuminado (Glow) ALREDEDOR del cuerpo
   blurCtx.save();
   const pulseBlur = 20 + 6 * Math.sin(t * 2.5); // El glow late sutilmente
   blurCtx.filter = `blur(${pulseBlur}px)`;
@@ -206,14 +199,14 @@ function renderAuraFromMask(image){
   blurCtx.drawImage(maskTmp, 0, 0);
   blurCtx.restore();
 
-  // 4. TRUCO MÁGICO: Usar 'destination-out' para remover el color de encima de tu cuerpo
+  // 3. TRUCO MÁGICO: Usar 'destination-out' para remover el color de encima de tu cuerpo
   // Esto hace que el aura quede perfectamente por DETRÁS de vos, sin taparte la cara
   blurCtx.save();
   blurCtx.globalCompositeOperation = 'destination-out';
   blurCtx.drawImage(segCanvas, 0, 0);
   blurCtx.restore();
 
-  // 5. Partículas flotantes místicas en el auraCanvas
+  // 4. Partículas flotantes místicas en el auraCanvas
   particles.forEach(p=>{
     p.x+=p.vx;p.y+=p.vy;
     if(p.y<-6){p.y=H+5;p.x=Math.random()*W;}
@@ -228,6 +221,7 @@ function renderAuraFromMask(image){
     auraCtx.fillStyle=hex2rgba(p.col,Math.min(fl*2,1));auraCtx.fill();
   });
 }
+
 
 async function startCam(){
   try{
