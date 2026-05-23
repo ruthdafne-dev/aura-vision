@@ -126,19 +126,94 @@ for(let i=0;i<60;i++){const s=document.createElement('div');s.className='star';s
 
 const AURAS=[
   {name:"Violeta Cósmico",c:"#a855f7",s:"#7c3aed",desc:"Tu campo vibra en la frecuencia más elevada. Intuitivo, creativo y magnético. Las almas sensibles te buscan sin saber por qué.",stats:{"Intuición":"97%","Magnetismo":"89%","Visión":"∞"}},
-  {name:"Rosa Cuántico",c:"#ec4899",s:"#db2777",desc:"Emanas amor incondicional en ondas visibles. Tu presencia sana sin que lo intentes. Naciste para conectar.",stats:{"Amor":"
-    const m=data[i]/255;
-    personMask.data[i]=255;
-    personMask.data[i+1]=255;
-    personMask.data[i+2]=255;
-    personMask.data[i+3]=m>0.5?255:0;
-  }
-  pCtx.putImageData(personMask,0,0);
-  blurCtx.drawImage(personCanvas,0,0);
+  {name:"Rosa Cuántico",c:"#ec4899",s:"#db2777",desc:"Emanas amor incondicional en ondas visibles. Tu presencia sana sin que lo intentes. Naciste para conectar.",stats:{"Amor":"∞","Empatía":"94%","Luz":"88%"}},
+  {name:"Índigo Estelar",c:"#6366f1",s:"#4f46e5",desc:"Portás el código de las estrellas en tu campo. Ves lo que otros no pueden ver. Tu energía desafía el tiempo lineal.",stats:{"Percepción":"96%","Profundidad":"91%","Misterio":"99%"}},
+  {name:"Turquesa Lunar",c:"#06b6d4",s:"#0891b2",desc:"Tu aura fluye como agua en movimiento eterno. Adaptable, sanadora, profunda. La luna reconoce tu frecuencia.",stats:{"Fluidez":"93%","Sanación":"87%","Conexión":"95%"}},
+  {name:"Dorado Solar",c:"#f59e0b",s:"#d97706",desc:"Irradiás energía solar pura. Líder natural, tu campo activa el de los demás. Sos un catalizador de cambio.",stats:{"Poder":"98%","Liderazgo":"92%","Brillo":"∞"}},
+  {name:"Esmeralda Vital",c:"#10b981",s:"#059669",desc:"Conectado a la fuerza primordial de la naturaleza. El verde más raro: el de quien creció en paz con su sombra.",stats:{"Vitalidad":"95%","Equilibrio":"90%","Raíz":"88%"}}
+];
+
+const video=document.getElementById('video');
+const segCanvas=document.getElementById('seg-canvas');
+const blurCanvas=document.getElementById('blur-canvas');
+const auraCanvas=document.getElementById('aura-canvas');
+const segCtx=segCanvas.getContext('2d');
+const blurCtx=blurCanvas.getContext('2d');
+const auraCtx=auraCanvas.getContext('2d');
+const viewer=document.getElementById('viewer');
+
+let W,H,animId,scanning=false,cur=null,particles=[];
+let segmentation=null,mpCamera=null,modelReady=false;
+let showAura=false;
+
+function resize(){
+  W=viewer.offsetWidth;H=viewer.offsetHeight;
+  segCanvas.width=W;segCanvas.height=H;
+  blurCanvas.width=W;blurCanvas.height=H;
+  auraCanvas.width=W;auraCanvas.height=H;
+}
+resize();
+window.addEventListener('resize',resize);
+
+function onResults(results){
+  if(!showAura) return;
+  
+  // Guardamos la máscara original de MediaPipe en el canvas oculto
+  segCtx.clearRect(0,0,W,H);
+  segCtx.drawImage(results.segmentationMask,0,0,W,H);
+  
+  renderAuraFromMask(results.image);
+}
+
+function renderAuraFromMask(image){
+  const t=Date.now()/1000;
+  blurCtx.clearRect(0,0,W,H);
+  auraCtx.clearRect(0,0,W,H);
+
+  // 1. Dibujar el video de fondo espejado (la cámara real del usuario)
+  blurCtx.save();
+  blurCtx.translate(W,0);
+  blurCtx.scale(-1,1);
+  blurCtx.drawImage(image,0,0,W,H);
   blurCtx.restore();
 
-  // Floating particles on aura canvas
-  auraCtx.clearRect(0,0,W,H);
+  // 2. Crear silueta de color basada en la máscara de MediaPipe
+  const maskTmp = document.createElement('canvas');
+  maskTmp.width = W; maskTmp.height = H;
+  const mCtx = maskTmp.getContext('2d');
+
+  // Dibujamos la máscara extraída
+  mCtx.drawImage(segCanvas, 0, 0);
+
+  // Reemplazamos los píxeles de la máscara por el color del Aura activa con una mezcla pulsante
+  mCtx.globalCompositeOperation = 'source-in';
+  const mix = 0.5 + 0.5 * Math.sin(t * 2);
+  mCtx.fillStyle = cur.c;
+  mCtx.fillRect(0,0,W,H);
+  mCtx.fillStyle = cur.s;
+  mCtx.globalAlpha = mix;
+  mCtx.fillRect(0,0,W,H);
+
+  // 3. Dibujar el resplandor difuminado (Glow) ALREDEDOR del cuerpo
+  blurCtx.save();
+  const pulseBlur = 20 + 6 * Math.sin(t * 2.5); // El glow late sutilmente
+  blurCtx.filter = `blur(${pulseBlur}px)`;
+  blurCtx.globalAlpha = 0.85; 
+  blurCtx.drawImage(maskTmp, 0, 0);
+  // Segunda capa para intensificar el centro del brillo
+  blurCtx.filter = `blur(${pulseBlur / 2}px)`;
+  blurCtx.globalAlpha = 0.5;
+  blurCtx.drawImage(maskTmp, 0, 0);
+  blurCtx.restore();
+
+  // 4. TRUCO MÁGICO: Usar 'destination-out' para remover el color de encima de tu cuerpo
+  // Esto hace que el aura quede perfectamente por DETRÁS de vos, sin taparte la cara
+  blurCtx.save();
+  blurCtx.globalCompositeOperation = 'destination-out';
+  blurCtx.drawImage(segCanvas, 0, 0);
+  blurCtx.restore();
+
+  // 5. Partículas flotantes místicas en el auraCanvas
   particles.forEach(p=>{
     p.x+=p.vx;p.y+=p.vy;
     if(p.y<-6){p.y=H+5;p.x=Math.random()*W;}
@@ -187,7 +262,6 @@ function initSegmentation(stream){
       setVS('campo energético detectado — listo para escanear');
     });
   }catch(e){
-    // Fallback if MediaPipe fails
     document.getElementById('loading-bar').classList.remove('on');
     document.getElementById('scanBtn').disabled=false;
     setVS('listo para escanear');
@@ -219,7 +293,6 @@ function doScan(){
     animEnergy();
     showAura=true;
     document.getElementById('blur-canvas').classList.add('on');
-    // Init particles
     particles=Array.from({length:55},()=>({
       x:Math.random()*W,y:Math.random()*H,
       r:.8+Math.random()*2.5,
@@ -233,7 +306,6 @@ function doScan(){
   setTimeout(()=>showResult(),3600);
 }
 
-// Fallback anim if MediaPipe fails
 function startFallbackAnim(){
   if(animId)cancelAnimationFrame(animId);
   function frame(){
