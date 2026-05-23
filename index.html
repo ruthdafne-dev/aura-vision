@@ -166,6 +166,7 @@ function onResults(results){
 }
 
 function renderAuraFromMask(image){
+function renderAuraFromMask(image){
   const t=Date.now()/1000;
   blurCtx.clearRect(0,0,W,H);
   auraCtx.clearRect(0,0,W,H);
@@ -221,6 +222,7 @@ function renderAuraFromMask(image){
     auraCtx.fillStyle=hex2rgba(p.col,Math.min(fl*2,1));auraCtx.fill();
   });
 }
+
 
 
 async function startCam(){
