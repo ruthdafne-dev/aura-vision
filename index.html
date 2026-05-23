@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aura Vision</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--ac:#a855f7;--as:#ec4899}
+body{background:#030108;color:#f0e6ff;font-family:'Cormorant Garamond',Georgia,serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow-x:hidden}
+.stars{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.star{position:absolute;width:2px;height:2px;border-radius:50%;background:#fff;animation:twinkle var(--d,3s) ease-in-out infinite var(--delay,0s)}
+@keyframes twinkle{0%,100%{opacity:.2}50%{opacity:.9}}
+header{position:relative;z-index:10;text-align:center;padding:1.5rem 1rem .5rem}
+.logo{font-family:'Cinzel Decorative',serif;font-size:clamp(1.2rem,5vw,1.8rem);letter-spacing:.15em;background:linear-gradient(135deg,#e879f9,#a855f7,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.tagline{font-style:italic;font-size:.85rem;color:rgba(240,230,255,.4);letter-spacing:.1em;margin-top:4px}
+main{position:relative;z-index:10;width:100%;max-width:420px;padding:.75rem 1rem 3rem;display:flex;flex-direction:column;align-items:center;gap:.9rem}
+
+.viewer{position:relative;width:100%;aspect-ratio:3/4;border-radius:24px;overflow:hidden;background:#060010;border:1px solid rgba(168,85,247,.3)}
+.viewer::after{content:'';position:absolute;inset:0;border-radius:24px;box-shadow:inset 0 0 80px rgba(168,85,247,.1);z-index:8;pointer-events:none}
+
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:24px;transform:scaleX(-1);z-index:1}
+
+/* Canvas layers */
+#seg-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0;display:none}
+#aura-canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:24px;z-index:3;pointer-events:none}
+#blur-canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:24px;z-index:2;pointer-events:none;opacity:0;transition:opacity .8s}
+#blur-canvas.on{opacity:1}
+
+.scan{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent 0%,var(--ac) 40%,#fff 50%,var(--ac) 60%,transparent 100%);box-shadow:0 0 16px var(--ac),0 0 4px #fff;z-index:6;top:-5%;opacity:0}
+.scan.go{animation:scandown 2.2s cubic-bezier(.4,0,.6,1) forwards}
+@keyframes scandown{0%{top:-5%;opacity:0}8%{opacity:1}92%{opacity:1}100%{top:106%;opacity:0}}
+
+.corner{position:absolute;width:22px;height:22px;z-index:7;pointer-events:none}
+.corner::before,.corner::after{content:'';position:absolute;background:var(--ac);box-shadow:0 0 6px var(--ac)}
+.corner::before{width:2px;height:100%}
+.corner::after{width:100%;height:2px}
+.tl{top:10px;left:10px}.tr{top:10px;right:10px;transform:scaleX(-1)}.bl{bottom:10px;left:10px;transform:scaleY(-1)}.br{bottom:10px;right:10px;transform:scale(-1)}
+
+.vstatus{position:absolute;bottom:14px;left:0;right:0;text-align:center;font-style:italic;font-size:.78rem;letter-spacing:.1em;color:rgba(240,230,255,.55);z-index:9;pointer-events:none}
+
+.perm-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;z-index:10;background:#060010;border-radius:24px;padding:2rem;text-align:center}
+.perm-eye{font-size:3rem;animation:eyepulse 2s ease-in-out infinite}
+@keyframes eyepulse{0%,100%{filter:drop-shadow(0 0 8px var(--ac))}50%{filter:drop-shadow(0 0 22px var(--ac))}}
+.perm-overlay p{font-style:italic;font-size:1rem;color:rgba(240,230,255,.65);line-height:1.6}
+
+.energy-row{width:100%;display:flex;align-items:center;gap:10px}
+.elabel{font-size:.72rem;letter-spacing:.1em;color:rgba(240,230,255,.35);white-space:nowrap}
+.ebar{flex:1;height:3px;background:rgba(168,85,247,.12);border-radius:2px;overflow:hidden}
+.efill{height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--as));border-radius:2px;box-shadow:0 0 8px var(--ac);transition:width 1.8s cubic-bezier(.4,0,.2,1)}
+.eval{font-size:.72rem;color:rgba(240,230,255,.4);min-width:2.8em;text-align:right}
+
+.btn-row{display:flex;gap:10px;width:100%}
+.btn{flex:1;padding:.8rem .5rem;border-radius:100px;border:none;font-family:'Cormorant Garamond',serif;font-size:1rem;letter-spacing:.05em;cursor:pointer;transition:all .22s}
+.btn-p{background:linear-gradient(135deg,#7c3aed,#a855f7,#ec4899);color:#fff;box-shadow:0 4px 22px rgba(168,85,247,.4)}
+.btn-p:hover{box-shadow:0 6px 30px rgba(168,85,247,.6);transform:translateY(-1px)}
+.btn-p:active{transform:scale(.97)}
+.btn-p:disabled{opacity:.4;cursor:default;transform:none;box-shadow:none}
+.btn-s{background:rgba(168,85,247,.1);color:rgba(240,230,255,.75);border:1px solid rgba(168,85,247,.3);display:none}
+.btn-s:hover{background:rgba(168,85,247,.2);color:#f0e6ff}
+
+.panel{width:100%;background:rgba(13,0,21,.85);border:1px solid rgba(168,85,247,.2);border-radius:20px;padding:1.1rem 1.3rem;backdrop-filter:blur(12px);display:none;flex-direction:column;gap:.65rem;animation:pin .5s ease}
+.panel.on{display:flex}
+@keyframes pin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.aname{font-family:'Cinzel Decorative',serif;font-size:1.25rem;text-align:center;letter-spacing:.06em}
+.adesc{font-style:italic;font-size:.9rem;color:rgba(240,230,255,.65);text-align:center;line-height:1.6}
+.astats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.astat{border-radius:12px;padding:6px 4px;text-align:center;font-size:.7rem;letter-spacing:.04em;color:rgba(240,230,255,.75)}
+.astat strong{display:block;font-size:.9rem;font-weight:400;font-style:normal;margin-bottom:2px}
+
+.loading-bar{width:100%;height:3px;background:rgba(168,85,247,.1);border-radius:2px;overflow:hidden;display:none}
+.loading-bar.on{display:block}
+.loading-fill{height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--as));border-radius:2px;animation:loadpulse 1.5s ease-in-out infinite}
+@keyframes loadpulse{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+<header>
+  <div class="logo">✦ AURA VISION ✦</div>
+  <div class="tagline">lee tu campo energético</div>
+</header>
+<main>
+  <div class="viewer" id="viewer">
+    <div class="perm-overlay" id="perm">
+      <div class="perm-eye">👁</div>
+      <p>Permitir acceso a la cámara para revelar tu aura</p>
+      <button class="btn btn-p" style="max-width:220px" onclick="startCam()">Activar cámara</button>
+    </div>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="seg-canvas"></canvas>
+    <canvas id="blur-canvas"></canvas>
+    <canvas id="aura-canvas"></canvas>
+    <div class="scan" id="scan"></div>
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+    <div class="vstatus" id="vstatus"></div>
+  </div>
+
+  <div class="loading-bar" id="loading-bar"><div class="loading-fill"></div></div>
+
+  <div class="energy-row">
+    <span class="elabel">ENERGÍA</span>
+    <div class="ebar"><div class="efill" id="efill"></div></div>
+    <span class="eval" id="eval">—</span>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-p" id="scanBtn" onclick="doScan()" disabled>✦ Escanear aura</button>
+    <button class="btn btn-s" id="resetBtn" onclick="doReset()">Nueva lectura</button>
+  </div>
+  <div class="panel" id="panel">
+    <div class="aname" id="aname"></div>
+    <div class="adesc" id="adesc"></div>
+    <div class="astats" id="astats"></div>
+  </div>
+</main>
+
+<!-- MediaPipe SelfieSegmentation -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+<script>
+// Stars
+const starsEl=document.getElementById('stars');
+for(let i=0;i<60;i++){const s=document.createElement('div');s.className='star';s.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*100}%;--d:${2+Math.random()*4}s;--delay:-${Math.random()*4}s;opacity:${.1+Math.random()*.5}`;starsEl.appendChild(s);}
+
+const AURAS=[
+  {name:"Violeta Cósmico",c:"#a855f7",s:"#7c3aed",desc:"Tu campo vibra en la frecuencia más elevada. Intuitivo, creativo y magnético. Las almas sensibles te buscan sin saber por qué.",stats:{"Intuición":"97%","Magnetismo":"89%","Visión":"∞"}},
+  {name:"Rosa Cuántico",c:"#ec4899",s:"#db2777",desc:"Emanas amor incondicional en ondas visibles. Tu presencia sana sin que lo intentes. Naciste para conectar.",stats:{"Amor":"∞","Empatía":"94%","Luz":"88%"}},
+  {name:"Índigo Estelar",c:"#6366f1",s:"#4f46e5",desc:"Portás el código de las estrellas en tu campo. Ves lo que otros no pueden ver. Tu energía desafía el tiempo lineal.",stats:{"Percepción":"96%","Profundidad":"91%","Misterio":"99%"}},
+  {name:"Turquesa Lunar",c:"#06b6d4",s:"#0891b2",desc:"Tu aura fluye como agua en movimiento eterno. Adaptable, sanadora, profunda. La luna reconoce tu frecuencia.",stats:{"Fluidez":"93%","Sanación":"87%","Conexión":"95%"}},
+  {name:"Dorado Solar",c:"#f59e0b",s:"#d97706",desc:"Irradiás energía solar pura. Líder natural, tu campo activa el de los demás. Sos un catalizador de cambio.",stats:{"Poder":"98%","Liderazgo":"92%","Brillo":"∞"}},
+  {name:"Esmeralda Vital",c:"#10b981",s:"#059669",desc:"Conectado a la fuerza primordial de la naturaleza. El verde más raro: el de quien creció en paz con su sombra.",stats:{"Vitalidad":"95%","Equilibrio":"90%","Raíz":"88%"}}
+];
+
+const video=document.getElementById('video');
+const segCanvas=document.getElementById('seg-canvas');
+const blurCanvas=document.getElementById('blur-canvas');
+const auraCanvas=document.getElementById('aura-canvas');
+const segCtx=segCanvas.getContext('2d');
+const blurCtx=blurCanvas.getContext('2d');
+const auraCtx=auraCanvas.getContext('2d');
+const viewer=document.getElementById('viewer');
+
+let W,H,animId,scanning=false,cur=null,particles=[];
+let segmentation=null,mpCamera=null,modelReady=false;
+let showAura=false;
+
+function resize(){
+  W=viewer.offsetWidth;H=viewer.offsetHeight;
+  segCanvas.width=W;segCanvas.height=H;
+  blurCanvas.width=W;blurCanvas.height=H;
+  auraCanvas.width=W;auraCanvas.height=H;
+}
+resize();
+window.addEventListener('resize',resize);
+
+// MediaPipe segmentation result
+function onResults(results){
+  if(!showAura)return;
+  segCtx.clearRect(0,0,W,H);
+  segCtx.drawImage(results.segmentationMask,0,0,W,H);
+  const maskData=segCtx.getImageData(0,0,W,H);
+
+  // Build person edge mask for aura glow
+  renderAuraFromMask(maskData, results.image);
+}
+
+function renderAuraFromMask(maskData, image){
+  const t=Date.now()/1000;
+  blurCtx.clearRect(0,0,W,H);
+  auraCtx.clearRect(0,0,W,H);
+
+  // Draw mirrored video on blur canvas as base
+  blurCtx.save();
+  blurCtx.translate(W,0);blurCtx.scale(-1,1);
+  blurCtx.drawImage(image,0,0,W,H);
+  blurCtx.restore();
+
+  // Extract person mask pixels
+  const data=maskData.data;
+  // Create edge glow by expanding the mask
+  const glowLayers=5;
+  const pulse=1+.06*Math.sin(t*1.8);
+
+  for(let layer=glowLayers;layer>=1;layer--){
+    const spread=layer*12*pulse;
+    const alpha=(glowLayers-layer+1)/glowLayers;
+
+    // Use compositing to paint glow around person shape
+    blurCtx.save();
+    blurCtx.globalCompositeOperation='source-over';
+
+    // Create a temporary canvas for dilated mask
+    const tmp=document.createElement('canvas');
+    tmp.width=W;tmp.height=H;
+    const tCtx=tmp.getContext('2d');
+
+    // Draw the segmentation mask
+    const imgData=tCtx.createImageData(W,H);
+    const r=hex2rgb(cur.c);
+    const r2=hex2rgb(cur.s);
+    const mix=(.5+.5*Math.sin(t*1.2));
+
+    for(let i=0;i<data.length;i+=4){
+      const m=data[i]/255;
+      if(m>0.3){
+        imgData.data[i]=Math.round(r[0]*(1-mix)+r2[0]*mix);
+        imgData.data[i+1]=Math.round(r[1]*(1-mix)+r2[1]*mix);
+        imgData.data[i+2]=Math.round(r[2]*(1-mix)+r2[2]*mix);
+        imgData.data[i+3]=Math.round(m*220*alpha);
+      }
+    }
+    tCtx.putImageData(imgData,0,0);
+
+    // Blur + expand
+    blurCtx.filter=`blur(${spread}px)`;
+    blurCtx.globalAlpha=alpha*.6;
+    blurCtx.drawImage(tmp,0,0);
+    blurCtx.restore();
+  }
+
+  // Draw person on top (video, not tinted)
+  blurCtx.save();
+  blurCtx.globalCompositeOperation='source-over';
+  blurCtx.filter='none';
+  blurCtx.globalAlpha=1;
+
+  // Mask to only show person pixels
+  const personCanvas=document.createElement('canvas');
+  personCanvas.width=W;personCanvas.height=H;
+  const pCtx=personCanvas.getContext('2d');
+  pCtx.save();
+  pCtx.translate(W,0);pCtx.scale(-1,1);
+  pCtx.drawImage(image,0,0,W,H);
+  pCtx.restore();
+  pCtx.globalCompositeOperation='destination-in';
+  const personMask=pCtx.createImageData(W,H);
+  for(let i=0;i<data.length;i+=4){
+    const m=data[i]/255;
+    personMask.data[i]=255;
+    personMask.data[i+1]=255;
+    personMask.data[i+2]=255;
+    personMask.data[i+3]=m>0.5?255:0;
+  }
+  pCtx.putImageData(personMask,0,0);
+  blurCtx.drawImage(personCanvas,0,0);
+  blurCtx.restore();
+
+  // Floating particles on aura canvas
+  auraCtx.clearRect(0,0,W,H);
+  particles.forEach(p=>{
+    p.x+=p.vx;p.y+=p.vy;
+    if(p.y<-6){p.y=H+5;p.x=Math.random()*W;}
+    if(p.x<-5||p.x>W+5)p.vx*=-1;
+    const fl=p.a*(0.5+0.5*Math.sin(t*2.5+p.phase));
+    const gp=auraCtx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*5);
+    gp.addColorStop(0,hex2rgba(p.col,fl*.9));
+    gp.addColorStop(1,'transparent');
+    auraCtx.fillStyle=gp;
+    auraCtx.beginPath();auraCtx.arc(p.x,p.y,p.r*5,0,Math.PI*2);auraCtx.fill();
+    auraCtx.beginPath();auraCtx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    auraCtx.fillStyle=hex2rgba(p.col,Math.min(fl*2,1));auraCtx.fill();
+  });
+}
+
+async function startCam(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    video.srcObject=stream;
+    await video.play();
+    document.getElementById('perm').style.display='none';
+    setVS('cargando modelo de detección...');
+    document.getElementById('loading-bar').classList.add('on');
+    initSegmentation(stream);
+  }catch(e){
+    document.querySelector('#perm p').textContent='No se pudo acceder a la cámara. Verificá los permisos (🔒 en la barra de direcciones).';
+  }
+}
+
+function initSegmentation(stream){
+  try{
+    segmentation=new SelfieSegmentation({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`});
+    segmentation.setOptions({modelSelection:1,selfieMode:true});
+    segmentation.onResults(onResults);
+
+    mpCamera=new Camera(video,{
+      onFrame:async()=>{
+        if(segmentation) await segmentation.send({image:video});
+      },
+      width:640,height:480
+    });
+    mpCamera.start().then(()=>{
+      modelReady=true;
+      document.getElementById('loading-bar').classList.remove('on');
+      document.getElementById('scanBtn').disabled=false;
+      setVS('campo energético detectado — listo para escanear');
+    });
+  }catch(e){
+    // Fallback if MediaPipe fails
+    document.getElementById('loading-bar').classList.remove('on');
+    document.getElementById('scanBtn').disabled=false;
+    setVS('listo para escanear');
+    fallbackMode=true;
+  }
+}
+
+let fallbackMode=false;
+
+function doScan(){
+  if(scanning)return;
+  scanning=true;
+  document.getElementById('scanBtn').disabled=true;
+  document.getElementById('panel').classList.remove('on');
+  document.getElementById('efill').style.width='0';
+  document.getElementById('eval').textContent='—';
+
+  cur=AURAS[Math.floor(Math.random()*AURAS.length)];
+  document.documentElement.style.setProperty('--ac',cur.c);
+  document.documentElement.style.setProperty('--as',cur.s);
+
+  setVS('analizando campo energético...');
+  const sl=document.getElementById('scan');
+  sl.classList.remove('go');void sl.offsetWidth;sl.classList.add('go');
+
+  setTimeout(()=>setVS('calibrando frecuencia áurica...'),1100);
+  setTimeout(()=>{
+    setVS('campo detectado ✦');
+    animEnergy();
+    showAura=true;
+    document.getElementById('blur-canvas').classList.add('on');
+    // Init particles
+    particles=Array.from({length:55},()=>({
+      x:Math.random()*W,y:Math.random()*H,
+      r:.8+Math.random()*2.5,
+      vx:(Math.random()-.5)*.55,vy:-.3-Math.random()*.55,
+      a:.3+Math.random()*.7,
+      col:Math.random()>.5?cur.c:cur.s,
+      phase:Math.random()*Math.PI*2
+    }));
+    if(fallbackMode) startFallbackAnim();
+  },2300);
+  setTimeout(()=>showResult(),3600);
+}
+
+// Fallback anim if MediaPipe fails
+function startFallbackAnim(){
+  if(animId)cancelAnimationFrame(animId);
+  function frame(){
+    const t=Date.now()/1000;
+    blurCtx.clearRect(0,0,W,H);
+    auraCtx.clearRect(0,0,W,H);
+    const pulse=1+.05*Math.sin(t*1.6);
+    const cx=W/2,cy=H*.38;
+    const g1=blurCtx.createRadialGradient(cx,cy,0,cx,cy,W*.65*pulse);
+    g1.addColorStop(0,hex2rgba(cur.s,.3));
+    g1.addColorStop(.4,hex2rgba(cur.c,.2));
+    g1.addColorStop(1,'transparent');
+    blurCtx.fillStyle=g1;blurCtx.fillRect(0,0,W,H);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.y<-6){p.y=H+5;p.x=Math.random()*W;}
+      if(p.x<-5||p.x>W+5)p.vx*=-1;
+      const fl=p.a*(0.6+0.4*Math.sin(t*2.2+p.phase));
+      const gp=auraCtx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*4);
+      gp.addColorStop(0,hex2rgba(p.col,fl));gp.addColorStop(1,'transparent');
+      auraCtx.fillStyle=gp;auraCtx.beginPath();auraCtx.arc(p.x,p.y,p.r*4,0,Math.PI*2);auraCtx.fill();
+      auraCtx.beginPath();auraCtx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      auraCtx.fillStyle=hex2rgba(p.col,Math.min(fl*2,1));auraCtx.fill();
+    });
+    animId=requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+function animEnergy(){
+  const target=72+Math.floor(Math.random()*26);
+  let v=0;
+  const iv=setInterval(()=>{v=Math.min(v+2,target);document.getElementById('efill').style.width=v+'%';document.getElementById('eval').textContent=v+'%';if(v>=target)clearInterval(iv);},30);
+}
+
+function showResult(){
+  const a=cur;
+  const nm=document.getElementById('aname');
+  nm.textContent=a.name;nm.style.color=a.c;nm.style.textShadow=`0 0 24px ${a.c}88`;
+  document.getElementById('adesc').textContent=a.desc;
+  document.getElementById('astats').innerHTML=Object.entries(a.stats).map(([k,v])=>`<div class="astat" style="background:${a.c}18;border:1px solid ${a.c}33"><strong style="color:${a.c}">${v}</strong>${k}</div>`).join('');
+  document.getElementById('panel').classList.add('on');
+  setVS('lectura completa ✦');
+  scanning=false;
+  document.getElementById('scanBtn').style.display='none';
+  document.getElementById('resetBtn').style.display='block';
+}
+
+function doReset(){
+  if(animId)cancelAnimationFrame(animId);
+  animId=null;cur=null;particles=[];scanning=false;showAura=false;
+  blurCtx.clearRect(0,0,W,H);auraCtx.clearRect(0,0,W,H);
+  document.getElementById('blur-canvas').classList.remove('on');
+  document.getElementById('panel').classList.remove('on');
+  document.getElementById('efill').style.width='0';
+  document.getElementById('eval').textContent='—';
+  document.getElementById('scanBtn').style.display='block';
+  document.getElementById('scanBtn').disabled=false;
+  document.getElementById('resetBtn').style.display='none';
+  document.documentElement.style.setProperty('--ac','#a855f7');
+  document.documentElement.style.setProperty('--as','#ec4899');
+  setVS('listo para nueva lectura');
+}
+
+function setVS(t){document.getElementById('vstatus').textContent=t;}
+function hex2rgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return `rgba(${r},${g},${b},${a})`;}
+function hex2rgb(hex){return[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)];}
+
+document.getElementById('scan').addEventListener('animationend',()=>{document.getElementById('scan').classList.remove('go');});
+</script>
+</body>
+</html>
