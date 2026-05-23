@@ -116,7 +116,6 @@ main{position:relative;z-index:10;width:100%;max-width:420px;padding:.75rem 1rem
   </div>
 </main>
 
-<!-- MediaPipe SelfieSegmentation -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 
@@ -127,117 +126,7 @@ for(let i=0;i<60;i++){const s=document.createElement('div');s.className='star';s
 
 const AURAS=[
   {name:"Violeta Cósmico",c:"#a855f7",s:"#7c3aed",desc:"Tu campo vibra en la frecuencia más elevada. Intuitivo, creativo y magnético. Las almas sensibles te buscan sin saber por qué.",stats:{"Intuición":"97%","Magnetismo":"89%","Visión":"∞"}},
-  {name:"Rosa Cuántico",c:"#ec4899",s:"#db2777",desc:"Emanas amor incondicional en ondas visibles. Tu presencia sana sin que lo intentes. Naciste para conectar.",stats:{"Amor":"∞","Empatía":"94%","Luz":"88%"}},
-  {name:"Índigo Estelar",c:"#6366f1",s:"#4f46e5",desc:"Portás el código de las estrellas en tu campo. Ves lo que otros no pueden ver. Tu energía desafía el tiempo lineal.",stats:{"Percepción":"96%","Profundidad":"91%","Misterio":"99%"}},
-  {name:"Turquesa Lunar",c:"#06b6d4",s:"#0891b2",desc:"Tu aura fluye como agua en movimiento eterno. Adaptable, sanadora, profunda. La luna reconoce tu frecuencia.",stats:{"Fluidez":"93%","Sanación":"87%","Conexión":"95%"}},
-  {name:"Dorado Solar",c:"#f59e0b",s:"#d97706",desc:"Irradiás energía solar pura. Líder natural, tu campo activa el de los demás. Sos un catalizador de cambio.",stats:{"Poder":"98%","Liderazgo":"92%","Brillo":"∞"}},
-  {name:"Esmeralda Vital",c:"#10b981",s:"#059669",desc:"Conectado a la fuerza primordial de la naturaleza. El verde más raro: el de quien creció en paz con su sombra.",stats:{"Vitalidad":"95%","Equilibrio":"90%","Raíz":"88%"}}
-];
-
-const video=document.getElementById('video');
-const segCanvas=document.getElementById('seg-canvas');
-const blurCanvas=document.getElementById('blur-canvas');
-const auraCanvas=document.getElementById('aura-canvas');
-const segCtx=segCanvas.getContext('2d');
-const blurCtx=blurCanvas.getContext('2d');
-const auraCtx=auraCanvas.getContext('2d');
-const viewer=document.getElementById('viewer');
-
-let W,H,animId,scanning=false,cur=null,particles=[];
-let segmentation=null,mpCamera=null,modelReady=false;
-let showAura=false;
-
-function resize(){
-  W=viewer.offsetWidth;H=viewer.offsetHeight;
-  segCanvas.width=W;segCanvas.height=H;
-  blurCanvas.width=W;blurCanvas.height=H;
-  auraCanvas.width=W;auraCanvas.height=H;
-}
-resize();
-window.addEventListener('resize',resize);
-
-// MediaPipe segmentation result
-function onResults(results){
-  if(!showAura)return;
-  segCtx.clearRect(0,0,W,H);
-  segCtx.drawImage(results.segmentationMask,0,0,W,H);
-  const maskData=segCtx.getImageData(0,0,W,H);
-
-  // Build person edge mask for aura glow
-  renderAuraFromMask(maskData, results.image);
-}
-
-function renderAuraFromMask(maskData, image){
-  const t=Date.now()/1000;
-  blurCtx.clearRect(0,0,W,H);
-  auraCtx.clearRect(0,0,W,H);
-
-  // Draw mirrored video on blur canvas as base
-  blurCtx.save();
-  blurCtx.translate(W,0);blurCtx.scale(-1,1);
-  blurCtx.drawImage(image,0,0,W,H);
-  blurCtx.restore();
-
-  // Extract person mask pixels
-  const data=maskData.data;
-  // Create edge glow by expanding the mask
-  const glowLayers=5;
-  const pulse=1+.06*Math.sin(t*1.8);
-
-  for(let layer=glowLayers;layer>=1;layer--){
-    const spread=layer*12*pulse;
-    const alpha=(glowLayers-layer+1)/glowLayers;
-
-    // Use compositing to paint glow around person shape
-    blurCtx.save();
-    blurCtx.globalCompositeOperation='source-over';
-
-    // Create a temporary canvas for dilated mask
-    const tmp=document.createElement('canvas');
-    tmp.width=W;tmp.height=H;
-    const tCtx=tmp.getContext('2d');
-
-    // Draw the segmentation mask
-    const imgData=tCtx.createImageData(W,H);
-    const r=hex2rgb(cur.c);
-    const r2=hex2rgb(cur.s);
-    const mix=(.5+.5*Math.sin(t*1.2));
-
-    for(let i=0;i<data.length;i+=4){
-      const m=data[i]/255;
-      if(m>0.3){
-        imgData.data[i]=Math.round(r[0]*(1-mix)+r2[0]*mix);
-        imgData.data[i+1]=Math.round(r[1]*(1-mix)+r2[1]*mix);
-        imgData.data[i+2]=Math.round(r[2]*(1-mix)+r2[2]*mix);
-        imgData.data[i+3]=Math.round(m*220*alpha);
-      }
-    }
-    tCtx.putImageData(imgData,0,0);
-
-    // Blur + expand
-    blurCtx.filter=`blur(${spread}px)`;
-    blurCtx.globalAlpha=alpha*.6;
-    blurCtx.drawImage(tmp,0,0);
-    blurCtx.restore();
-  }
-
-  // Draw person on top (video, not tinted)
-  blurCtx.save();
-  blurCtx.globalCompositeOperation='source-over';
-  blurCtx.filter='none';
-  blurCtx.globalAlpha=1;
-
-  // Mask to only show person pixels
-  const personCanvas=document.createElement('canvas');
-  personCanvas.width=W;personCanvas.height=H;
-  const pCtx=personCanvas.getContext('2d');
-  pCtx.save();
-  pCtx.translate(W,0);pCtx.scale(-1,1);
-  pCtx.drawImage(image,0,0,W,H);
-  pCtx.restore();
-  pCtx.globalCompositeOperation='destination-in';
-  const personMask=pCtx.createImageData(W,H);
-  for(let i=0;i<data.length;i+=4){
+  {name:"Rosa Cuántico",c:"#ec4899",s:"#db2777",desc:"Emanas amor incondicional en ondas visibles. Tu presencia sana sin que lo intentes. Naciste para conectar.",stats:{"Amor":"
     const m=data[i]/255;
     personMask.data[i]=255;
     personMask.data[i+1]=255;
